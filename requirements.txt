@@ -5,4 +5,3 @@ plotly
 prophet
 duckdb
 scipy
-pystan==3.9.0
