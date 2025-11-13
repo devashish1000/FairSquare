@@ -11,9 +11,9 @@ import tempfile
 import os
 from pdfme import build_pdf
 
+# ───────────────────── CONFIG ─────────────────────
 st.set_page_config(page_title="FairSquare BI Portal", page_icon="💰", layout="wide")
 
-# ───────────────────── STYLES ─────────────────────
 st.markdown("""
 <style>
     .css-1d391kg {background:#0B1215 !important}
@@ -73,9 +73,9 @@ with st.sidebar:
 
 # ───────────────────── LOAD OR SIMULATE DATA ─────────────────────
 if st.session_state.get("df") is None:
-    dates = pd.date_range("2023-01-01", periods=1200)
+    rng_dates = pd.date_range("2023-01-01", periods=1200)
     df = pd.DataFrame({
-        "date": np.random.choice(dates, 1200),
+        "date": np.random.choice(rng_dates, 1200),
         "sales": np.random.uniform(25, 800, 1200),
         "product": np.random.choice(["Meals","Beverages","Desserts","Snacks","Merch"],1200),
         "channel": np.random.choice(["Cash","Card","MobilePay"],1200),
@@ -89,7 +89,7 @@ df["date"] = pd.to_datetime(df["date"])
 daily = df.groupby("date")["sales"].sum().reset_index().rename(columns={"date":"ds","sales":"y"})
 
 
-# ───────────────────── PDF BUILDER (pdfme) ─────────────────────
+# ───────────────────── PDF BUILDER USING PDFME ─────────────────────
 def create_pdf(sections, path):
     """
     sections = list of {"type": "text"/"image", "content": ...}
@@ -111,25 +111,30 @@ def create_pdf(sections, path):
 # ───────────────────── TOP-RIGHT BUTTONS ─────────────────────
 if st.session_state.get("df") is not None and uploaded is not None:
     st.markdown("<div style='position:fixed; top:12px; right:12px; z-index:999;'>", unsafe_allow_html=True)
+
     c1, c2 = st.columns([1,1])
 
     # EXECUTIVE DECK
     with c1:
         if st.button("Executive Deck"):
+            # TREND IMAGE
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp1:
                 fig = px.line(daily.tail(90), x="ds", y="y", title="90-Day Trend")
                 fig.update_layout(template="plotly_dark")
                 fig.write_image(tmp1.name)
                 img_trend = tmp1.name
 
+            # FORECAST IMAGE
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp2:
                 m = Prophet(yearly_seasonality=True, weekly_seasonality=True)
                 m.fit(daily)
                 future = m.make_future_dataframe(periods=90)
                 fc = m.predict(future)
+
                 fig_fc = go.Figure()
                 fig_fc.add_trace(go.Scatter(x=daily["ds"], y=daily["y"], name="Actual"))
                 fig_fc.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat"], name="Forecast"))
+                fig_fc.update_layout(template="plotly_dark")
                 fig_fc.write_image(tmp2.name)
                 img_fc = tmp2.name
 
@@ -141,4 +146,47 @@ if st.session_state.get("df") is not None and uploaded is not None:
                 {"type": "text", "content": f"Average Daily Sales: ${daily['y'].mean():,.0f}"},
                 {"type": "text", "content": f"Top Product: {df.groupby('product')['sales'].sum().idxmax()}"},
                 {"type": "text", "content": f"Top Location: {df.groupby('city')['sales'].sum().idxmax()}"},
-                {"type": "image", "content": img
+                {"type": "image", "content": img_trend},
+                {"type": "image", "content": img_fc}
+            ]
+
+            create_pdf(sections, pdf_path)
+
+            with open(pdf_path, "rb") as f:
+                st.download_button("Download Executive Deck", f, file_name="FairSquare_Executive_Deck.pdf")
+
+    # WEEKLY SUMMARY
+    with c2:
+        if st.button("Weekly Summary"):
+            last_week = daily.set_index("ds").resample("W-SUN").sum().iloc[-1]
+
+            pdf_path = "Weekly_Summary.pdf"
+
+            sections = [
+                {"type": "text", "content": f"Weekly Summary\nWeek Ending {last_week.name.strftime('%b %d')}"},
+                {"type": "text", "content": f"Revenue: ${last_week['y']:,.0f}"},
+                {"type": "text", "content": "Key Actions:\n• Run Meal Promo\n• Re-engage VIP Customers\n• Push MobilePay Adoption"}
+            ]
+
+            create_pdf(sections, pdf_path)
+
+            with open(pdf_path, "rb") as f:
+                st.download_button("Download Weekly Report", f, file_name="FairSquare_Weekly_Report.pdf")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ───────────────────── HOME ─────────────────────
+st.title("Real-time intelligence for small-business owners")
+st.markdown("### Upload your data → get insights instantly")
+
+if uploaded is None:
+    st.markdown("<div class='pulse' style='text-align:center'><h2 style='color:#00D4AA'>↑ Upload CSV to Activate Full Portal</h2></div>", unsafe_allow_html=True)
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total Revenue", f"${df['sales'].sum():,.0f}")
+c2.metric("Avg Daily Sales", f"${daily['y'].mean():,.0f}")
+c3.metric("Top Location", df.groupby("city")["sales"].sum().idxmax())
+c4.metric("VIP Share", f"{(df['customer_type']=='VIP').mean():.0%}")
+
+st.caption("Data: date, sales, product, channel, customer_type, city • Built by Dev Neupane")
