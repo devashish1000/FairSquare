@@ -5,3 +5,5 @@ plotly
 prophet
 duckdb
 scipy
+matplotlib
+kaleido
