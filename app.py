@@ -55,20 +55,26 @@ def load_data(file):
     return None
 
 
-# ───────────────────── SIDEBAR ─────────────────────
+# ───────────────────── SIDEBAR — RESTORED ORIGINAL LOGIC ─────────────────────
 with st.sidebar:
     st.markdown("### 💰 FairSquare BI Portal")
+
     uploaded = st.file_uploader("Upload retail transactions CSV", type="csv")
     df_raw = load_data(uploaded)
 
     if df_raw is not None:
         st.session_state["df"] = df_raw
-        st.success("Data loaded")
+        st.success("Real data loaded")
         if st.session_state["first_load"]:
             st.balloons()
             st.session_state["first_load"] = False
     else:
         st.info("Demo mode – upload your CSV")
+
+    # Restore sidebar Settings section
+    with st.expander("Settings"):
+        st.selectbox("Theme", ["Dark","Light"])
+        st.selectbox("Currency", ["USD","EUR","GBP"])
 
 
 # ───────────────────── LOAD OR SIMULATE DATA ─────────────────────
@@ -108,7 +114,7 @@ def create_pdf(sections, path):
     build_pdf({"sections": doc}, path)
 
 
-# ───────────────────── TOP-RIGHT BUTTONS ─────────────────────
+# ───────────────────── TOP-RIGHT EXECUTIVE BUTTONS ─────────────────────
 if st.session_state.get("df") is not None and uploaded is not None:
     st.markdown("<div style='position:fixed; top:12px; right:12px; z-index:999;'>", unsafe_allow_html=True)
 
