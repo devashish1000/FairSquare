@@ -53,8 +53,14 @@ if uploaded_file:
             else:
                 st.session_state.df = df
                 st.sidebar.success(f"Loaded: {len(df)} rows | {df['date'].min().date()} to {df['date'].max().date()}")
-                st.sidebar.download_button("Download Template", data=df.head(100).to_csv(index=False), "template.csv")
-    except:
+                # FIXED: Correct argument order
+                st.sidebar.download_button(
+                    label="Download Template",
+                    data=df.head(100).to_csv(index=False),
+                    file_name="template.csv",
+                    mime="text/csv"
+                )
+    except Exception as e:
         st.sidebar.error("Invalid CSV.")
         df = load_demo_data()
 else:
@@ -202,7 +208,12 @@ elif page == "Live SQL":
     try:
         result = duckdb.query(query).df()
         st.dataframe(result)
-        st.download_button("Download", result.to_csv(index=False), "result.csv")
+        st.download_button(
+            label="Download",
+            data=result.to_csv(index=False),
+            file_name="result.csv",
+            mime="text/csv"
+        )
     except: st.error("Invalid SQL")
     data_badge()
 
