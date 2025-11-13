@@ -5,6 +5,4 @@ plotly
 prophet
 duckdb
 scipy
-matplotlib
-kaleido
-pdfme
+pystan==3.9.0
