@@ -7,7 +7,7 @@ from prophet import Prophet
 from datetime import datetime, timedelta
 import duckdb
 import base64
-from fpdf import FPDF
+from fpdf import FPDF   # ✅ fpdf2 (safe)
 import tempfile
 import os
 
@@ -48,7 +48,8 @@ def load_data(file):
                 for c in ["product","channel","customer_type","city"]:
                     if c not in df.columns: df[c] = "Unknown"
                 return df[["date","sales","product","channel","customer_type","city"]]
-        except: pass
+        except:
+            pass
     return None
 
 with st.sidebar:
@@ -65,7 +66,7 @@ with st.sidebar:
     else:
         st.info("Demo mode – upload your CSV")
 
-# Load data
+# Load (or simulate) data
 if st.session_state.df is None:
     dates = pd.date_range("2023-01-01", periods=1200)
     df = pd.DataFrame({
@@ -82,13 +83,21 @@ else:
 df["date"] = pd.to_datetime(df["date"])
 daily = df.groupby("date")["sales"].sum().reset_index().rename(columns={"date":"ds","sales":"y"})
 
-# ───────────────────── TOP-RIGHT: EXECUTIVE DECK + WEEKLY REPORT ─────────────────────
+# ───────────────────── EXECUTIVE PDF GENERATION FIX ─────────────────────
+def pdf_bytes(pdf_obj):
+    """fpdf2 requires encoding when outputting as string"""
+    return pdf_obj.output(dest="S").encode("latin-1")
+
+
+# ───────────────────── TOP-RIGHT BUTTONS ─────────────────────
 if st.session_state.df is not None and uploaded is not None:
     with st.container():
         st.markdown("<div style='position:fixed; top:12px; right:12px; z-index:999'>", unsafe_allow_html=True)
         c1, c2 = st.columns([1,1])
+
+        # EXEC DECK
         with c1:
-            if st.button("Executive Deck", type="primary"):
+            if st.button("Executive Deck"):
                 pdf = FPDF()
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 24)
@@ -100,7 +109,7 @@ if st.session_state.df is not None and uploaded is not None:
                 pdf.cell(0, 12, f"Top Product: {df.groupby('product')['sales'].sum().idxmax()}", ln=1)
                 pdf.cell(0, 12, f"Top Location: {df.groupby('city')['sales'].sum().idxmax()}", ln=1)
 
-                # Revenue Trend
+                # Revenue trend
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 20)
                 pdf.cell(0, 15, "Revenue Performance", ln=1)
@@ -122,17 +131,23 @@ if st.session_state.df is not None and uploaded is not None:
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=daily["ds"], y=daily["y"], name="Actual", line=dict(color="#00D4AA")))
                     fig.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat"], name="Forecast", line=dict(color="#FFC107")))
-                    fig.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_lower"], fill=None, mode="lines"))
-                    fig.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_upper"], fill="tonexty", name="95% Confidence", fillcolor="rgba(0,212,170,0.15)"))
+                    fig.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_lower"]))
+                    fig.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_upper"], fill="tonexty",
+                                             fillcolor="rgba(0,212,170,0.15)", name="95% Confidence"))
                     fig.update_layout(template="plotly_dark", paper_bgcolor="#0B1215")
                     fig.write_image(tmp.name)
                     pdf.image(tmp.name, w=180)
 
-                b64 = base64.b64encode(pdf.output(dest="S")).decode()
-                st.download_button("Download Executive Deck", data=base64.b64decode(b64), file_name="FairSquare_Executive_Deck.pdf", mime="application/pdf")
+                st.download_button(
+                    "Download Executive Deck",
+                    data=pdf_bytes(pdf),
+                    file_name="FairSquare_Executive_Deck.pdf",
+                    mime="application/pdf"
+                )
 
+        # WEEKLY SUMMARY
         with c2:
-            if st.button("Weekly Summary", type="secondary"):
+            if st.button("Weekly Summary"):
                 last_week = daily.set_index("ds").resample("W-SUN").sum().iloc[-1]
                 pdf = FPDF()
                 pdf.add_page()
@@ -142,11 +157,17 @@ if st.session_state.df is not None and uploaded is not None:
                 pdf.ln(15)
                 pdf.cell(0, 12, f"Revenue: ${last_week['y']:,.0f}", ln=1)
                 pdf.cell(0, 12, "Key Actions: Run Meal promo • Re-engage VIPs • Push MobilePay", ln=1)
-                b64 = base64.b64encode(pdf.output(dest="S")).decode()
-                st.download_button("Download Weekly Report", data=base64.b64decode(b64), file_name=f"FairSquare_Weekly_{last_week.name.strftime('%Y_W%W')}.pdf", mime="application/pdf")
+
+                st.download_button(
+                    "Download Weekly Report",
+                    data=pdf_bytes(pdf),
+                    file_name=f"FairSquare_Weekly_{last_week.name.strftime('%Y_W%W')}.pdf",
+                    mime="application/pdf"
+                )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ───────────────────── SETTINGS (Bottom Left) ─────────────────────
+# ───────────────────── SETTINGS ─────────────────────
 with st.container():
     st.markdown("<div style='position:fixed; bottom:10px; left:10px; z-index:999'>", unsafe_allow_html=True)
     with st.expander("Settings"):
