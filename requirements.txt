@@ -7,3 +7,4 @@ duckdb
 scipy
 matplotlib
 kaleido
+pdfme
